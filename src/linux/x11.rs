@@ -300,6 +300,9 @@ pub(super) fn run(action: Action) -> Result<()> {
     };
     clipboard.note_owner(owner, CURRENT_TIME);
     clipboard.dispatch()?;
+    if let Action::Watch(_, start) = action {
+        start.ready()?;
+    }
     if matches!(action, Action::HoldRandom) {
         clipboard.acquire(Some(random_text()?))?;
         let owner = clipboard
@@ -316,7 +319,7 @@ pub(super) fn run(action: Action) -> Result<()> {
     loop {
         clipboard.dispatch()?;
         let remaining = match action {
-            Action::Watch(options) => {
+            Action::Watch(options, _) => {
                 let delay = clipboard.countdown.remaining(Instant::now());
                 if delay.is_some_and(|d| d.is_zero()) {
                     clipboard.wipe_due(options.mode)?;

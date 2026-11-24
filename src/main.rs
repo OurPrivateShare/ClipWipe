@@ -2,6 +2,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+mod background;
 mod cli;
 mod install;
 
@@ -99,7 +100,8 @@ fn run(command: cli::Command) -> Result<()> {
         Command::Help(sections) => print_information(sections),
         Command::Version => print_information(&[]),
         Command::Clear(mode) => clipboard::apply(mode),
-        Command::Watch(options) => clipboard::watch(options),
+        Command::Watch(options) => clipboard::watch(options, background::WatchStart::Foreground),
+        Command::BackgroundWatch(options) => background::watch(options),
         Command::Install => install::install(),
         Command::Uninstall => install::uninstall(),
         Command::Enable(options) => install::enable(options),

@@ -424,7 +424,12 @@ pub(super) fn run(action: Action) -> Result<()> {
             }
             acknowledge()?;
         }
-        Action::Watch(_) => (),
+        Action::Watch(_, crate::background::WatchStart::Background) => {
+            queue.roundtrip(&mut state)?;
+            state.require_device()?;
+            crate::background::WatchStart::Background.ready()?;
+        }
+        Action::Watch(_, crate::background::WatchStart::Foreground) => (),
     }
     loop {
         queue.dispatch_pending(&mut state)?;
@@ -436,7 +441,7 @@ pub(super) fn run(action: Action) -> Result<()> {
         // for the registry to announce a new one, with no deadline armed.
         state.check_manager()?;
         let mut remaining = None;
-        if let Action::Watch(options) = action {
+        if let Action::Watch(options, _) = action {
             remaining = state.remaining();
             if remaining.is_some_and(|d| d.is_zero()) {
                 // Data-control has no conditional write. Synchronize all earlier

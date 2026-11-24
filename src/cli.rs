@@ -49,7 +49,7 @@ const HELP: &[&str] = &[
   install                                       安装到系统，供所有用户使用
   uninstall                                     卸载系统安装
   autostart enable [--timeout 秒] [--mode clear|random]
-                                                下次登录图形桌面时启动
+                                                立即后台监听，并在以后登录时自动启动
   autostart disable                             取消登录自启
   -h, --help                                    显示帮助
   -V, --version                                 显示版本
@@ -64,7 +64,7 @@ const HELP: &[&str] = &[
     INSTALL_CHECK_EXAMPLE,
     "\n",
     "\
-  设置当前用户登录自启，使用默认 30 秒
+  立即启动后台监听并设置当前用户登录自启，使用默认 30 秒
     clipwipe autostart enable
   设置当前用户登录自启，60 秒后随机覆盖
     clipwipe autostart enable --timeout 60 --mode random
@@ -105,7 +105,8 @@ const UNINSTALL_HELP: &[&str] = &[
     UNINSTALL_EXAMPLE,
 ];
 const AUTOSTART_HELP: &str = "\
-登录自启作用于当前用户，请在日常使用的终端运行。
+启用后会立即在当前桌面后台监听，以后登录也会自动启动。
+已有监听实例时沿用其参数，新设置用于下次登录。disable 只取消以后的登录自启。
 
   默认 30 秒后清空
     clipwipe autostart enable
@@ -121,6 +122,7 @@ pub(crate) enum Command {
     Version,
     Clear(Mode),
     Watch(WatchOptions),
+    BackgroundWatch(WatchOptions),
     Install,
     Uninstall,
     Enable(WatchOptions),
@@ -143,6 +145,9 @@ pub(crate) fn parse(arguments: &[String]) -> Result<Command, String> {
         }
         ["clear", options @ ..] => Command::Clear(parse_options(options, false)?.mode),
         ["watch", options @ ..] => Command::Watch(parse_options(options, true)?),
+        ["__background-watch", options @ ..] => {
+            Command::BackgroundWatch(parse_options(options, true)?)
+        }
         ["install"] => Command::Install,
         ["uninstall"] => Command::Uninstall,
         ["autostart", "enable", options @ ..] => Command::Enable(parse_options(options, true)?),

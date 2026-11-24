@@ -8,19 +8,19 @@ ClipWipe 是 Windows 和 Linux 的剪贴板清理工具。复制内容后默认�
 
 | 系统 | 发布包 |
 | --- | --- |
-| Windows x64 | `ClipWipe-0.1.0-windows-x64.zip` |
-| Linux x64（glibc 2.34 或以上） | `ClipWipe-0.1.0-linux-x64.tar.gz` |
+| Windows x64 | `ClipWipe-0.1.1-windows-x64.zip` |
+| Linux x64（glibc 2.34 或以上） | `ClipWipe-0.1.1-linux-x64.tar.gz` |
 
-`dist/` 还提供 `windows-x64/clipwipe.exe` 和 `linux-x64/clipwipe`。Windows ZIP 解压后的目录名为 `ClipWipe-0.1.0-win-x64`。两个压缩包均附有使用说明和更新记录，Linux 压缩包已保留可执行权限。若单独复制 Linux 二进制，可用 `chmod +x clipwipe` 补上执行权限。
+`dist/` 还提供 `windows-x64/clipwipe.exe` 和 `linux-x64/clipwipe`。Windows ZIP 解压后的目录名为 `ClipWipe-0.1.1-win-x64`。两个压缩包均附有使用说明和更新记录，Linux 压缩包已保留可执行权限。若单独复制 Linux 二进制，可用 `chmod +x clipwipe` 补上执行权限。
 
 `SHA256SUMS.txt` 记录压缩包及可执行文件的 SHA-256。在压缩包所在目录执行对应命令，再与清单核对。
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\ClipWipe-0.1.0-windows-x64.zip
+Get-FileHash -Algorithm SHA256 .\ClipWipe-0.1.1-windows-x64.zip
 ```
 
 ```sh
-sha256sum ClipWipe-0.1.0-linux-x64.tar.gz
+sha256sum ClipWipe-0.1.1-linux-x64.tar.gz
 ```
 
 ## 常用命令组合
@@ -45,7 +45,7 @@ sudo ./clipwipe install
 
 Linux 安装路径为 `/usr/local/bin/clipwipe`。
 
-安装后，在需要自启的账号下运行下面两条命令。ClipWipe 从该用户下次登录图形桌面起持续监听，默认在每次复制后等待 30 秒再清空。
+安装后，在需要自启的账号下运行下面两条命令。启用后 ClipWipe 立即在当前桌面后台监听，关掉终端后仍会运行，以后登录也会自动启动。默认每次复制后 30 秒清空。
 
 ```sh
 clipwipe --version
@@ -54,7 +54,7 @@ clipwipe autostart enable
 
 ### 调整开机启动的清理方式
 
-再次启用自启会更新下次登录时使用的参数。例如每次复制后等待 60 秒，再用随机文本覆盖。
+首次启用时会立即采用指定参数。如果当前会话已有监听实例，它会继续使用原参数，新设置用于下次登录。以下示例将清理方式设为复制后等待 60 秒，再用随机文本覆盖。
 
 ```sh
 clipwipe autostart enable --timeout 60 --mode random
@@ -71,7 +71,7 @@ clipwipe watch --timeout 15 --mode clear
 
 ### 关闭开机启动或卸载
 
-取消下次登录时的启动。
+取消以后的登录自启。当前会话中的监听会继续运行。
 
 ```sh
 clipwipe autostart disable
@@ -102,11 +102,11 @@ sudo /usr/local/bin/clipwipe uninstall
 | `clipwipe watch` | 在前台监听，每次复制后重新计时，按 `Ctrl+C` 退出 |
 | `clipwipe watch --timeout 60 --mode random` | 每次复制 60 秒后写入随机文本 |
 | `clipwipe install` | 安装到系统，供所有用户使用 |
-| `clipwipe autostart enable --timeout 30 --mode clear` | 下次登录图形桌面后自动监听 |
+| `clipwipe autostart enable --timeout 30 --mode clear` | 立即后台监听，并在以后登录桌面时自动启动 |
 | `clipwipe autostart disable` | 关闭后续登录自启 |
 | `clipwipe uninstall` | 卸载系统安装 |
 
-`--timeout` 使用正整数秒。`watch` 启动时如果已有内容，会从启动时算起。手动运行的参数仅对本次生效。再次启用自启可更新下次登录时使用的参数。
+`--timeout` 使用正整数秒。`watch` 启动时如果已有内容，会从启动时算起。手动运行的参数仅对本次生效。当前桌面无法启动监听时，命令会说明原因。下次登录时仍会使用已保存的自启设置。
 
 ## 桌面环境
 

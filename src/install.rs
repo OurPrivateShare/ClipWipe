@@ -197,14 +197,27 @@ pub(crate) fn enable(options: WatchOptions) -> Result<()> {
 }
 
 fn enable_at(path: &Path, options: WatchOptions) -> Result<()> {
-    check_installed(path)?;
-    platform::enable(path, options)?;
-    println!(
-        "已设置当前用户登录后启动，{} 秒后执行 {}。",
-        options.timeout.as_secs(),
-        options.mode.as_str()
-    );
+    save_autostart(path, options)?;
+    let status = crate::background::start(path, options)
+        .map_err(|error| format!("登录自启已保存，但当前会话启动监听失败：{error}"))?;
+    match status {
+        crate::background::StartStatus::Started => println!(
+            "登录自启已保存，当前会话已开始后台监听（{} 秒，{}）。",
+            options.timeout.as_secs(),
+            options.mode.as_str()
+        ),
+        crate::background::StartStatus::AlreadyRunning => println!(
+            "当前会话已有监听实例，继续使用该实例的参数。已保存下次登录设置（{} 秒，{}）。",
+            options.timeout.as_secs(),
+            options.mode.as_str()
+        ),
+    }
     Ok(())
+}
+
+fn save_autostart(path: &Path, options: WatchOptions) -> Result<()> {
+    check_installed(path)?;
+    platform::enable(path, options)
 }
 
 pub(crate) fn disable() -> Result<()> {
@@ -921,6 +934,60 @@ mod platform {
         use super::*;
         use std::os::windows::ffi::OsStrExt;
 
+        // The external fixture owns the window station, test directory and watcher cleanup.
+        #[test]
+        #[ignore = "requires a disposable window station and staged release executable"]
+        fn enable_immediately_in_private_station() -> Result<()> {
+            use windows_sys::Win32::System::StationsAndDesktops::{
+                GetProcessWindowStation, GetUserObjectInformationW, UOI_FLAGS, USEROBJECTFLAGS,
+            };
+            let mut flags = USEROBJECTFLAGS::default();
+            let ok = unsafe {
+                GetUserObjectInformationW(
+                    GetProcessWindowStation(),
+                    UOI_FLAGS,
+                    (&mut flags as *mut USEROBJECTFLAGS).cast(),
+                    size_of::<USEROBJECTFLAGS>() as u32,
+                    ptr::null_mut(),
+                )
+            };
+            assert!(
+                ok != 0 && flags.dwFlags & 1 == 0,
+                "a noninteractive window station is required"
+            );
+            let root = absolute_env("CLIPWIPE_ACTIVATION_FIXTURE")?;
+            let binary = root.join("clipwipe.exe");
+            install_file(&binary, &fs::read(&binary)?)?;
+            install_file(&helper(&binary), LAUNCHER)?;
+            let hive: Vec<_> = root
+                .join("autostart-test.dat")
+                .as_os_str()
+                .encode_wide()
+                .chain([0])
+                .collect();
+            let mut key = ptr::null_mut();
+            status(unsafe {
+                RegLoadAppKeyW(
+                    hive.as_ptr(),
+                    &mut key,
+                    KEY_ALL_ACCESS,
+                    REG_PROCESS_APPKEY,
+                    0,
+                )
+            })?;
+            let key = OpenKey(key);
+            status(unsafe { RegOverridePredefKey(HKEY_CURRENT_USER, key.0) })?;
+            let opts = WatchOptions {
+                timeout: std::time::Duration::from_secs(1),
+                mode: crate::Mode::Random,
+            };
+            enable_at(&binary, opts)?;
+            enable_at(&binary, opts)?;
+            assert!(owned_run(&binary)?);
+            status(unsafe { RegOverridePredefKey(HKEY_CURRENT_USER, ptr::null_mut()) })?;
+            Ok(())
+        }
+
         #[test]
         fn retired_running_image_preserves_an_immediate_reinstall() -> Result<()> {
             let executable = env::current_exe()?;
@@ -1042,7 +1109,7 @@ mod platform {
                 read_value(HKEY_CURRENT_USER, "Environment", "Path")?,
                 Some((user_path.to_owned(), REG_EXPAND_SZ))
             );
-            enable_at(
+            save_autostart(
                 &binary,
                 WatchOptions {
                     timeout: std::time::Duration::from_secs(77),
@@ -1069,7 +1136,7 @@ mod platform {
             )?;
             assert!(disable(&binary).is_err());
             change_value(HKEY_CURRENT_USER, RUN, "ClipWipe", None)?;
-            enable_at(&binary, WatchOptions::default())?;
+            save_autostart(&binary, WatchOptions::default())?;
             let user_startup = read_value(HKEY_CURRENT_USER, RUN, "ClipWipe")?;
             // Remove the isolated files directly if a real watcher is already active.
             // Its named mutex belongs to the interactive session, outside the hive.

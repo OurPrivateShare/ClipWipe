@@ -19,13 +19,13 @@ use std::{env, fs};
 enum Action {
     Clear,
     HoldRandom,
-    Watch(WatchOptions),
+    Watch(WatchOptions, crate::background::WatchStart),
 }
 
 impl Action {
     fn timeout(self) -> Duration {
         match self {
-            Self::Watch(options) => options.timeout,
+            Self::Watch(options, _) => options.timeout,
             _ => Duration::ZERO,
         }
     }
@@ -34,10 +34,13 @@ impl Action {
         matches!(
             self,
             Self::HoldRandom
-                | Self::Watch(WatchOptions {
-                    mode: Mode::Random,
-                    ..
-                })
+                | Self::Watch(
+                    WatchOptions {
+                        mode: Mode::Random,
+                        ..
+                    },
+                    _
+                )
         )
     }
 }
@@ -83,7 +86,7 @@ fn x11_server(display: &str) -> Option<(&str, u16)> {
     Some((host, number))
 }
 
-pub(crate) fn watch(options: WatchOptions) -> Result<()> {
+pub(crate) fn watch(options: WatchOptions, start: crate::background::WatchStart) -> Result<()> {
     // Abstract sockets vanish when the last descriptor is closed, even on a crash.
     let mut session = DefaultHasher::new();
     let wayland = using_wayland();
@@ -115,14 +118,14 @@ pub(crate) fn watch(options: WatchOptions) -> Result<()> {
         session.finish()
     );
     let address = SocketAddr::from_abstract_name(name.as_bytes())?;
-    let _instance = UnixListener::bind_addr(&address).map_err(|err| {
-        if err.kind() == io::ErrorKind::AddrInUse {
-            io::Error::new(err.kind(), "当前图形会话已有 ClipWipe 正在监听")
-        } else {
-            err
+    let _instance = match UnixListener::bind_addr(&address) {
+        Ok(instance) => instance,
+        Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
+            return start.already_running("当前图形会话已有 ClipWipe 正在监听");
         }
-    })?;
-    run(Action::Watch(options))
+        Err(err) => return Err(err.into()),
+    };
+    run(Action::Watch(options, start))
 }
 
 pub(crate) fn apply(mode: Mode) -> Result<()> {

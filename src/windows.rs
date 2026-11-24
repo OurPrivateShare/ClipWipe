@@ -330,7 +330,7 @@ pub(crate) fn watcher_running() -> Result<bool> {
     Ok(true)
 }
 
-fn session_lock() -> Result<OwnedHandle> {
+fn session_lock() -> Result<Option<OwnedHandle>> {
     let name = session_mutex_name()?;
     let raw = unsafe { CreateMutexW(null(), 0, name.as_ptr()) };
     if raw.is_null() {
@@ -339,9 +339,9 @@ fn session_lock() -> Result<OwnedHandle> {
     let already_exists = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
     let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
     if already_exists {
-        return Err("当前桌面会话已在运行 ClipWipe 监听。".into());
+        return Ok(None);
     }
-    Ok(handle)
+    Ok(Some(handle))
 }
 
 fn wait_for_input(duration: Option<Duration>) -> io::Result<()> {
@@ -358,13 +358,16 @@ fn wait_for_input(duration: Option<Duration>) -> io::Result<()> {
     Ok(())
 }
 
-pub(crate) fn watch(options: WatchOptions) -> Result<()> {
-    let _lock = session_lock()?;
+pub(crate) fn watch(options: WatchOptions, start: crate::background::WatchStart) -> Result<()> {
+    let Some(_lock) = session_lock()? else {
+        return start.already_running("当前桌面会话已在运行 ClipWipe 监听。");
+    };
     let mut window = Window::new()?;
     window.listen()?;
     let mut clock = Countdown::new(options.timeout);
     let mut version = ClipboardVersion::read();
     version.schedule(window.handle, &mut clock)?;
+    start.ready()?;
     let mut retry: Option<WriteRetry> = None;
     while let Some(updated) = window.drain_messages() {
         if updated {
