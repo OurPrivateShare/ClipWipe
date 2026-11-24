@@ -1,0 +1,14 @@
+# Rust 构建及发布产物
+/target/
+/dist/
+*.rs.bk
+
+# 本地编辑器设置
+/.idea/
+/.vscode/
+/.vs/
+
+# 操作系统生成的文件
+.DS_Store
+Desktop.ini
+Thumbs.db
